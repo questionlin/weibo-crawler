@@ -47,6 +47,10 @@ class Weibo(object):
             'original_video_download']  # 取值范围为0、1, 0代表不下载原创微博视频,1代表下载
         self.retweet_video_download = config[
             'retweet_video_download']  # 取值范围为0、1, 0代表不下载转发微博视频,1代表下载
+        self.profile_download = config[
+            'profile_download']  # 取值范围为0、1, 0代表不下载个人资料,1代表下载
+        self.long_weibo_download = config[
+            'long_weibo_download']  # 取值范围为0、1, 0代表不下载长微博,1代表下载
         self.cookie = {'Cookie': config.get('cookie')}  # 微博cookie，可填可不填
         self.mysql_config = config.get('mysql_config')  # MySQL数据库连接配置，可以不填
         user_id_list = config['user_id_list']
@@ -595,13 +599,13 @@ class Weibo(object):
             if retweeted_status and retweeted_status.get('id'):  # 转发
                 retweet_id = retweeted_status.get('id')
                 is_long_retweet = retweeted_status.get('isLongText')
-                if is_long:
+                if is_long and self.long_weibo_download:
                     weibo = self.get_long_weibo(weibo_id)
                     if not weibo:
                         weibo = self.parse_weibo(weibo_info)
                 else:
                     weibo = self.parse_weibo(weibo_info)
-                if is_long_retweet:
+                if is_long_retweet and self.long_weibo_download:
                     retweet = self.get_long_weibo(retweet_id)
                     if not retweet:
                         retweet = self.parse_weibo(retweeted_status)
@@ -611,7 +615,7 @@ class Weibo(object):
                     retweeted_status['created_at'])
                 weibo['retweet'] = retweet
             else:  # 原创
-                if is_long:
+                if is_long and self.long_weibo_download:
                     weibo = self.get_long_weibo(weibo_id)
                     if not weibo:
                         weibo = self.parse_weibo(weibo_info)
@@ -1014,8 +1018,9 @@ class Weibo(object):
     def get_pages(self):
         """获取全部微博"""
         try:
-            self.get_user_info()
-            self.print_user_info()
+            if self.profile_download:
+                self.get_user_info()
+                self.print_user_info()
             since_date = datetime.strptime(self.user_config['since_date'],
                                            '%Y-%m-%d')
             today = datetime.strptime(str(date.today()), '%Y-%m-%d')
