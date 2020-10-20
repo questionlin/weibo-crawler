@@ -51,8 +51,7 @@ class Weibo(object):
             'profile_download']  # 取值范围为0、1, 0代表不下载个人资料,1代表下载
         self.long_weibo_download = config[
             'long_weibo_download']  # 取值范围为0、1, 0代表不下载长微博,1代表下载
-        self.merge_csv = config[
-            'merge_csv']  # 取值范围为0、1, 0按uid保存csv文件，1合并成一个文件
+        self.merge_csv = config['merge_csv']  # 取值范围为0、1, 0按uid保存csv文件，1合并成一个文件
         self.cookie = {'Cookie': config.get('cookie')}  # 微博cookie，可填可不填
         self.mysql_config = config.get('mysql_config')  # MySQL数据库连接配置，可以不填
         user_id_list = config['user_id_list']
@@ -76,6 +75,33 @@ class Weibo(object):
         self.weibo = []  # 存储爬取到的所有微博信息
         self.weibo_id_list = []  # 存储爬取到的所有微博id
         self.file_name = str(time())+'.csv'
+        self.proxy_server_url = config['proxy_server_url']
+
+    def get_proxy(self):
+        return requests.get("http://{}/get/".format(self.proxy_server_url)).json()
+
+    def delete_proxy(self, proxy):
+        requests.get("http://{}/delete/?proxy={}".format(self.proxy_server_url, proxy))
+
+    def httpget(self, url, params=None, cookies=None):
+        retry_count = 5
+        proxy = None if self.proxy_server_url == '' else self.get_proxy().get("proxy")
+        if self.proxy_server_url == '':
+            proxies = None
+        else:
+            proxy = self.get_proxy().get("proxy")
+            proxies = proxies={"http": "http://{}".format(proxy)}
+        while retry_count > 0:
+            try:
+                res = requests.get(url, params=params, cookies=cookies, proxies=proxies)
+                return res
+            except Exception:
+                retry_count -= 1
+            
+            # 删除代理池中代理
+            if self.proxy_server_url != '':
+                self.delete_proxy(proxy)
+            return None
 
     def validate_config(self, config):
         """验证配置是否正确"""
@@ -133,7 +159,7 @@ class Weibo(object):
     def get_json(self, params):
         """获取网页中json数据"""
         url = 'https://m.weibo.cn/api/container/getIndex?'
-        r = requests.get(url, params=params, cookies=self.cookie)
+        r = self.httpget(url, params=params, cookies=self.cookie)
         return r.json()
 
     def get_weibo_json(self, page):
@@ -275,7 +301,7 @@ class Weibo(object):
         """获取长微博"""
         for i in range(5):
             url = 'https://m.weibo.cn/detail/%s' % id
-            html = requests.get(url, cookies=self.cookie).text
+            html = self.httpget(url, cookies=self.cookie).text
             html = html[html.find('"status":'):]
             html = html[:html.rfind('"hotScheme"')]
             html = html[:html.rfind(',')]
