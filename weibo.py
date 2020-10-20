@@ -13,7 +13,7 @@ import random
 import sys
 from collections import OrderedDict
 from datetime import date, datetime, timedelta
-from time import sleep
+from time import time, sleep
 
 import requests
 from lxml import etree
@@ -51,6 +51,8 @@ class Weibo(object):
             'profile_download']  # 取值范围为0、1, 0代表不下载个人资料,1代表下载
         self.long_weibo_download = config[
             'long_weibo_download']  # 取值范围为0、1, 0代表不下载长微博,1代表下载
+        self.merge_csv = config[
+            'merge_csv']  # 取值范围为0、1, 0按uid保存csv文件，1合并成一个文件
         self.cookie = {'Cookie': config.get('cookie')}  # 微博cookie，可填可不填
         self.mysql_config = config.get('mysql_config')  # MySQL数据库连接配置，可以不填
         user_id_list = config['user_id_list']
@@ -73,6 +75,7 @@ class Weibo(object):
         self.got_count = 0  # 存储爬取到的微博数
         self.weibo = []  # 存储爬取到的所有微博信息
         self.weibo_id_list = []  # 存储爬取到的所有微博id
+        self.file_name = str(time())+'.csv'
 
     def validate_config(self, config):
         """验证配置是否正确"""
@@ -727,6 +730,8 @@ class Weibo(object):
                 os.makedirs(file_dir)
             if type == 'img' or type == 'video':
                 return file_dir
+            if self.merge_csv:
+                return os.path.split(os.path.realpath(__file__))[0] + os.sep + 'weibo' + os.sep + self.file_name
             file_path = file_dir + os.sep + self.user_config[
                 'user_id'] + '.' + type
             return file_path

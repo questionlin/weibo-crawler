@@ -9,6 +9,7 @@
     "retweet_video_download": 0,
     "profile_download": 1,
     "long_weibo_download": 1,
+    "merge_csv": 0,
     "cookie": "your cookie",
     "mysql_config": {
         "host": "localhost",
