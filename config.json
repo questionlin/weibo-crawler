@@ -7,7 +7,6 @@
     "retweet_pic_download": 0,
     "original_video_download": 0,
     "retweet_video_download": 0,
-    "profile_download": 1,
     "long_weibo_download": 0,
     "merge_csv": 1,
     "proxy_server_url": "127.0.0.1:5010",

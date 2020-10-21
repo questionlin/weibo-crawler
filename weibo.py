@@ -47,8 +47,6 @@ class Weibo(object):
             'original_video_download']  # 取值范围为0、1, 0代表不下载原创微博视频,1代表下载
         self.retweet_video_download = config[
             'retweet_video_download']  # 取值范围为0、1, 0代表不下载转发微博视频,1代表下载
-        self.profile_download = config[
-            'profile_download']  # 取值范围为0、1, 0代表不下载个人资料,1代表下载
         self.long_weibo_download = config[
             'long_weibo_download']  # 取值范围为0、1, 0代表不下载长微博,1代表下载
         self.merge_csv = config['merge_csv']  # 取值范围为0、1, 0按uid保存csv文件，1合并成一个文件
@@ -1049,9 +1047,8 @@ class Weibo(object):
     def get_pages(self):
         """获取全部微博"""
         try:
-            if self.profile_download:
-                self.get_user_info()
-                self.print_user_info()
+            self.get_user_info()
+            self.print_user_info()
             since_date = datetime.strptime(self.user_config['since_date'],
                                            '%Y-%m-%d')
             today = datetime.strptime(str(date.today()), '%Y-%m-%d')
