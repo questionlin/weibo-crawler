@@ -49,7 +49,7 @@ class Weibo(object):
             'retweet_video_download']  # 取值范围为0、1, 0代表不下载转发微博视频,1代表下载
         self.long_weibo_download = config[
             'long_weibo_download']  # 取值范围为0、1, 0代表不下载长微博,1代表下载
-        self.merge_csv = config['merge_csv']  # 取值范围为0、1, 0按uid保存csv文件，1合并成一个文件
+        self.merge_csv = config['merge_csv']  # 取值范围为0、1, 0按user_id保存csv文件，1合并成一个文件
         self.cookie = {'Cookie': config.get('cookie')}  # 微博cookie，可填可不填
         self.mysql_config = config.get('mysql_config')  # MySQL数据库连接配置，可以不填
         user_id_list = config['user_id_list']
@@ -89,17 +89,20 @@ class Weibo(object):
         else:
             proxy = self.get_proxy().get("proxy")
             proxies = proxies={"http": "http://{}".format(proxy)}
+
+        e = None
         while retry_count > 0:
             try:
                 res = requests.get(url, params=params, cookies=cookies, proxies=proxies)
                 return res
-            except Exception:
+            except Exception as ee:
+                e = ee
                 retry_count -= 1
-            
-            # 删除代理池中代理
-            if self.proxy_server_url != '':
-                self.delete_proxy(proxy)
-            return None
+
+        # 如果重试次数用尽，则删除代理池中代理，抛出异常
+        if self.proxy_server_url != '':
+            self.delete_proxy(proxy)
+        raise e
 
     def validate_config(self, config):
         """验证配置是否正确"""
@@ -726,7 +729,7 @@ class Weibo(object):
         for w in self.weibo[wrote_count:]:
             wb = OrderedDict()
             for k, v in w.items():
-                if k not in ['user_id', 'screen_name', 'retweet']:
+                if k not in ['screen_name', 'retweet']:
                     if 'unicode' in str(type(v)):
                         v = v.encode('utf-8')
                     wb[k] = v
@@ -745,6 +748,9 @@ class Weibo(object):
     def get_filepath(self, type):
         """获取结果文件路径"""
         try:
+            if self.merge_csv and type == 'csv':
+                return os.path.split(os.path.realpath(__file__))[0] + os.sep + 'weibo' + os.sep + self.file_name
+
             file_dir = os.path.split(
                 os.path.realpath(__file__)
             )[0] + os.sep + 'weibo' + os.sep + self.user['screen_name']
@@ -754,8 +760,6 @@ class Weibo(object):
                 os.makedirs(file_dir)
             if type == 'img' or type == 'video':
                 return file_dir
-            if self.merge_csv:
-                return os.path.split(os.path.realpath(__file__))[0] + os.sep + 'weibo' + os.sep + self.file_name
             file_path = file_dir + os.sep + self.user_config[
                 'user_id'] + '.' + type
             return file_path
@@ -765,7 +769,7 @@ class Weibo(object):
     def get_result_headers(self):
         """获取要写入结果文件的表头"""
         result_headers = [
-            'id', 'bid', '正文', '头条文章url', '原始图片url', '视频url', '位置', '日期', '工具',
+            'user_id', 'id', 'bid', '正文', '头条文章url', '原始图片url', '视频url', '位置', '日期', '工具',
             '点赞数', '评论数', '转发数', '话题', '@用户'
         ]
         if not self.filter:
