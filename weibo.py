@@ -50,6 +50,7 @@ class Weibo(object):
         self.long_weibo_download = config[
             'long_weibo_download']  # 取值范围为0、1, 0代表不下载长微博,1代表下载
         self.merge_csv = config['merge_csv']  # 取值范围为0、1, 0按user_id保存csv文件，1合并成一个文件
+        self.retweet_max_page = config['retweet_max_page']  # 一个用户如果这么多页只有转发，就认为是机器人，不再抓取
         self.cookie = {'Cookie': config.get('cookie')}  # 微博cookie，可填可不填
         self.mysql_config = config.get('mysql_config')  # MySQL数据库连接配置，可以不填
         user_id_list = config['user_id_list']
@@ -72,36 +73,44 @@ class Weibo(object):
         self.got_count = 0  # 存储爬取到的微博数
         self.weibo = []  # 存储爬取到的所有微博信息
         self.weibo_id_list = []  # 存储爬取到的所有微博id
-        self.file_name = str(time())+'.csv'
-        self.proxy_server_url = config['proxy_server_url']
+        self.file_name = str(time())+'.csv'  # 当合并的时候，写入csv文件名
+        self.proxy_server_url = config['proxy_server_url']  # 获取代理服务器
+        self.proxy_url = ''  # 当前使用的代理
+        self.block_user_list = [] # 屏蔽的用户id
 
     def get_proxy(self):
-        return requests.get("http://{}/get/".format(self.proxy_server_url)).json()
+        while True:
+            proxy = requests.get("http://{}/get/".format(self.proxy_server_url)).json().get("proxy")
+            if proxy:
+                return proxy
+            sleep(10)
 
     def delete_proxy(self, proxy):
         requests.get("http://{}/delete/?proxy={}".format(self.proxy_server_url, proxy))
 
     def httpget(self, url, params=None, cookies=None):
         retry_count = 5
-        proxy = None if self.proxy_server_url == '' else self.get_proxy().get("proxy")
         if self.proxy_server_url == '':
             proxies = None
         else:
-            proxy = self.get_proxy().get("proxy")
+            proxy = self.get_proxy()
+            self.proxy_url = proxy
             proxies = proxies={"http": "http://{}".format(proxy)}
 
         e = None
         while retry_count > 0:
             try:
-                res = requests.get(url, params=params, cookies=cookies, proxies=proxies)
+                res = requests.get(url, params=params, cookies=cookies, proxies=proxies, verify=False)
                 return res
             except Exception as ee:
                 e = ee
                 retry_count -= 1
 
+        """
         # 如果重试次数用尽，则删除代理池中代理，抛出异常
         if self.proxy_server_url != '':
             self.delete_proxy(proxy)
+        """
         raise e
 
     def validate_config(self, config):
@@ -670,8 +679,11 @@ class Weibo(object):
         """获取一页的全部微博"""
         try:
             js = self.get_weibo_json(page)
+            weibo_count = 0
+            retweet_count = 0
             if js['ok']:
                 weibos = js['data']['cards']
+                weibo_count = len(weibos)
                 for w in weibos:
                     if w['card_type'] == 9:
                         wb = self.get_one_weibo(w)
@@ -686,10 +698,12 @@ class Weibo(object):
                                 if self.is_pinned_weibo(w):
                                     continue
                                 else:
-                                    logger.info(u'{}已获取{}({})的第{}页微博{}'.format(
+                                    logger.info(u'{}已获取{}({})的第{}页微博{}条{}'.format(
                                         '-' * 30, self.user['screen_name'],
-                                        self.user['id'], page, '-' * 30))
-                                    return True
+                                        self.user['id'], page, weibo_count, '-' * 30))
+                                    return [True, retweet_count == weibo_count]
+                            if 'retweet' in wb.keys():
+                                retweet_count += 1
                             if (not self.filter) or (
                                     'retweet' not in wb.keys()):
                                 self.weibo.append(wb)
@@ -698,9 +712,12 @@ class Weibo(object):
                                 self.print_weibo(wb)
                             else:
                                 logger.info(u'正在过滤转发微博')
-            logger.info(u'{}已获取{}({})的第{}页微博{}'.format(
+            logger.info(u'{}已获取{}({})的第{}页微博{}条{}'.format(
                 '-' * 30, self.user['screen_name'], self.user['id'], page,
-                '-' * 30))
+                weibo_count, '-' * 30))
+            if weibo_count == 0:
+                return [True, retweet_count == weibo_count]
+            return [False, retweet_count == weibo_count]
         except Exception as e:
             logger.exception(e)
 
@@ -1062,9 +1079,12 @@ class Weibo(object):
                 page1 = 0
                 random_pages = random.randint(1, 5)
                 self.start_date = datetime.now().strftime('%Y-%m-%d')
+                all_retweet_page_count = 0
                 for page in tqdm(range(1, page_count + 1), desc='Progress'):
-                    is_end = self.get_one_page(page)
-                    if is_end:
+                    is_end, is_all_retweet = self.get_one_page(page)
+                    if is_all_retweet:
+                        all_retweet_page_count += 1
+                    if is_end or (self.retweet_max_page > 0 and all_retweet_page_count >= self.retweet_max_page):
                         break
 
                     if page % 20 == 0:  # 每爬20页写入一次文件
@@ -1074,8 +1094,7 @@ class Weibo(object):
                     # 通过加入随机等待避免被限制。爬虫速度过快容易被系统限制(一段时间后限
                     # 制会自动解除)，加入随机等待模拟人的操作，可降低被系统限制的风险。默
                     # 认是每爬取1到5页随机等待6到10秒，如果仍然被限，可适当增加sleep时间
-                    if (page -
-                            page1) % random_pages == 0 and page < page_count:
+                    if (page - page1) % random_pages == 0 and page < page_count:
                         sleep(random.randint(6, 10))
                         page1 = page
                         random_pages = random.randint(1, 5)
@@ -1084,6 +1103,9 @@ class Weibo(object):
             logger.info(u'微博爬取完成，共爬取%d条微博', self.got_count)
         except Exception as e:
             logger.exception(e)
+            # 所有的错误都当成是因为代理的，比如代理被微博封了
+            if self.proxy_server_url != '':
+                self.delete_proxy(self.proxy_url)
 
     def get_user_config_list(self, file_path):
         """获取文件中的微博id信息"""

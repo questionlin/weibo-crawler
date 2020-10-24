@@ -1,7 +1,7 @@
 {
-    "user_id_list": ["1669879400"],
+    "user_id_list": "user_id_list.txt",
     "filter": 1,
-    "since_date": "2020-10-16",
+    "since_date": "2020-10-14",
     "write_mode": ["csv"],
     "original_pic_download": 0,
     "retweet_pic_download": 0,
@@ -9,6 +9,7 @@
     "retweet_video_download": 0,
     "long_weibo_download": 0,
     "merge_csv": 1,
+    "retweet_max_page": 10,
     "proxy_server_url": "127.0.0.1:5010",
     "cookie": "your cookie",
     "mysql_config": {
