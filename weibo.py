@@ -50,6 +50,7 @@ class Weibo(object):
         self.long_weibo_download = config[
             'long_weibo_download']  # 取值范围为0、1, 0代表不下载长微博,1代表下载
         self.merge_csv = config['merge_csv']  # 取值范围为0、1, 0按user_id保存csv文件，1合并成一个文件
+        self.max_page = config['max_page']  # 一个用户如果发特别多的推，则认为可能是在打榜，或者新闻账号，不再抓取
         self.retweet_max_page = config['retweet_max_page']  # 一个用户如果这么多页只有转发，就认为是机器人，不再抓取
         self.cookie = {'Cookie': config.get('cookie')}  # 微博cookie，可填可不填
         self.mysql_config = config.get('mysql_config')  # MySQL数据库连接配置，可以不填
@@ -1084,7 +1085,9 @@ class Weibo(object):
                     is_end, is_all_retweet = self.get_one_page(page)
                     if is_all_retweet:
                         all_retweet_page_count += 1
-                    if is_end or (self.retweet_max_page > 0 and all_retweet_page_count >= self.retweet_max_page):
+                    if is_end \
+                        or (self.retweet_max_page > 0 and all_retweet_page_count >= self.retweet_max_page) \
+                        or (self.max_page > 0 and page > max_page):
                         break
 
                     if page % 20 == 0:  # 每爬20页写入一次文件
