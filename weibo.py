@@ -11,6 +11,7 @@ import math
 import os
 import random
 import sys
+import warnings
 from collections import OrderedDict
 from datetime import date, datetime, timedelta
 from time import time, sleep
@@ -19,6 +20,8 @@ import requests
 from lxml import etree
 from requests.adapters import HTTPAdapter
 from tqdm import tqdm
+
+warnings.filterwarnings("ignore")
 
 logging_path = os.path.split(
     os.path.realpath(__file__))[0] + os.sep + 'logging.conf'
@@ -52,7 +55,9 @@ class Weibo(object):
         self.merge_csv = config['merge_csv']  # 取值范围为0、1, 0按user_id保存csv文件，1合并成一个文件
         self.max_page = config['max_page']  # 一个用户如果发特别多的推，则认为可能是在打榜，或者新闻账号，不再抓取
         self.retweet_max_page = config['retweet_max_page']  # 一个用户如果这么多页只有转发，就认为是机器人，不再抓取
-        self.cookie = {'Cookie': config.get('cookie')}  # 微博cookie，可填可不填
+        cookie = config.get('cookie')  # 微博cookie，可填可不填
+        user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.111 Safari/537.36'
+        self.headers = {'User_Agent': user_agent, 'Cookie': cookie}
         self.mysql_config = config.get('mysql_config')  # MySQL数据库连接配置，可以不填
         user_id_list = config['user_id_list']
         if not isinstance(user_id_list, list):
@@ -89,7 +94,7 @@ class Weibo(object):
     def delete_proxy(self, proxy):
         requests.get("http://{}/delete/?proxy={}".format(self.proxy_server_url, proxy))
 
-    def httpget(self, url, params=None, cookies=None):
+    def httpget(self, url, params=None, headers=None):
         retry_count = 5
         if self.proxy_server_url == '':
             proxies = None
@@ -101,7 +106,7 @@ class Weibo(object):
         e = None
         while retry_count > 0:
             try:
-                res = requests.get(url, params=params, cookies=cookies, proxies=proxies, verify=False)
+                res = requests.get(url, params=params, headers=headers, proxies=proxies, verify=False)
                 return res
             except Exception as ee:
                 e = ee
@@ -170,7 +175,7 @@ class Weibo(object):
     def get_json(self, params):
         """获取网页中json数据"""
         url = 'https://m.weibo.cn/api/container/getIndex?'
-        r = self.httpget(url, params=params, cookies=self.cookie)
+        r = self.httpget(url, params=params, headers=self.headers)
         return r.json()
 
     def get_weibo_json(self, page):
@@ -312,7 +317,7 @@ class Weibo(object):
         """获取长微博"""
         for i in range(5):
             url = 'https://m.weibo.cn/detail/%s' % id
-            html = self.httpget(url, cookies=self.cookie).text
+            html = self.httpget(url, headers=self.headers).text
             html = html[html.find('"status":'):]
             html = html[:html.rfind('"hotScheme"')]
             html = html[:html.rfind(',')]
@@ -376,7 +381,10 @@ class Weibo(object):
             if not os.path.isfile(file_path):
                 s = requests.Session()
                 s.mount(url, HTTPAdapter(max_retries=5))
-                downloaded = s.get(url, cookies=self.cookie, timeout=(5, 10))
+                downloaded = s.get(url,
+                                   headers=self.headers,
+                                   timeout=(5, 10),
+                                   verify=False)
                 with open(file_path, 'wb') as f:
                     f.write(downloaded.content)
         except Exception as e:
