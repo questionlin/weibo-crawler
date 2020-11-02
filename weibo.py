@@ -89,6 +89,7 @@ class Weibo(object):
             proxy = requests.get("http://{}/get/".format(self.proxy_server_url)).json().get("proxy")
             if proxy:
                 return proxy
+            logger.warning('没有获取到代理')
             sleep(10)
 
     def delete_proxy(self, proxy):
@@ -1095,7 +1096,7 @@ class Weibo(object):
                         all_retweet_page_count += 1
                     if is_end \
                         or (self.retweet_max_page > 0 and all_retweet_page_count >= self.retweet_max_page) \
-                        or (self.max_page > 0 and page > max_page):
+                        or (self.max_page > 0 and page > self.max_page):
                         break
 
                     if page % 20 == 0:  # 每爬20页写入一次文件
